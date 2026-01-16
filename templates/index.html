@@ -3,91 +3,296 @@
     <head>
         <meta http-equiv="Content-Language" chartset="utf-8" content="en" />
 
-        <title>lgraph-demo</title>
+        <title>HN batch analyzer</title>
         <style>
+            :root {
+                color-scheme: light;
+                --bg: #f6f6ef;
+                --paper: #ffffff;
+                --paper-2: #fff9f2;
+                --text: #1c1b1a;
+                --muted: #6e6b67;
+                --accent: #ff6600;
+                --accent-2: #f0b35a;
+                --border: #e4e0d7;
+                --danger: #c2410c;
+                --success: #15803d;
+                --shadow: 0 12px 30px rgba(41, 29, 20, 0.12);
+            }
+            * {
+                box-sizing: border-box;
+            }
             body {
-                font-family:
-                    system-ui,
-                    -apple-system,
-                    sans-serif;
-                padding: 24px;
+                margin: 0;
+                font-family: "Newsreader", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+                background: linear-gradient(180deg, #fff6ea 0%, #f6f6ef 22%, #f6f6ef 100%);
+                color: var(--text);
+                min-height: 100vh;
             }
-            button {
-                padding: 10px 14px;
-                cursor: pointer;
-            }
-            pre {
-                padding: 12px;
-                background: #f6f6f6;
-                border-radius: 8px;
-            }
-            .row {
-                margin-top: 12px;
+            main {
+                max-width: 920px;
+                margin: 0 auto;
+                padding: 36px 20px 80px;
                 display: flex;
-                gap: 8px;
+                flex-direction: column;
+                gap: 22px;
+            }
+            h1 {
+                font-size: 32px;
+                margin: 0;
+                letter-spacing: -0.02em;
+            }
+            h2 {
+                margin: 0 0 10px;
+                font-size: 20px;
+                letter-spacing: -0.01em;
+                color: var(--accent);
+            }
+            p {
+                margin: 0;
+                color: var(--muted);
+                font-family: "Inter", "Segoe UI", sans-serif;
+                font-size: 14px;
+            }
+            .card {
+                background: var(--paper);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 18px 20px;
+                box-shadow: var(--shadow);
+            }
+            .card.hero {
+                border-left: 6px solid var(--accent);
+                background: linear-gradient(135deg, #fff, #fff6ea);
+            }
+            .actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
                 align-items: center;
             }
-            #spinner {
-                display: none;
+            button {
+                border: 1px solid #de5a00;
+                border-radius: 6px;
+                padding: 10px 16px;
+                font-size: 13px;
+                font-weight: 700;
+                cursor: pointer;
+                color: #fff;
+                background: linear-gradient(180deg, #ff7a1a, #ff6600);
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            button.secondary {
+                background: linear-gradient(180deg, #f2bf6f, #f0b35a);
+                border-color: #e09b3b;
+                color: #3a2a1c;
+            }
+            button:active {
+                transform: translateY(1px);
+            }
+            button:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+            .status-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 10px;
+                border-radius: 999px;
+                background: var(--paper-2);
+                color: var(--muted);
+                font-size: 12px;
+                border: 1px dashed var(--border);
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--muted);
+                animation: pulse 1.4s ease-in-out infinite;
+            }
+            .dot.success {
+                background: var(--success);
+            }
+            .dot.error {
+                background: var(--danger);
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    transform: scale(0.8);
+                    opacity: 0.6;
+                }
+                50% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+            details {
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 10px 12px;
+                background: #fffaf4;
+            }
+            summary {
+                cursor: pointer;
+                font-weight: 700;
+                color: var(--text);
+                font-family: "Inter", "Segoe UI", sans-serif;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
+                font-size: 12px;
+            }
+            .meta {
+                font-size: 12px;
+                color: var(--muted);
+                margin-top: 6px;
+                font-family: "Inter", "Segoe UI", sans-serif;
+            }
+            .list {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                margin-top: 12px;
+            }
+            .list-item {
+                padding: 10px 12px;
+                border-radius: 6px;
+                background: var(--paper-2);
+                border: 1px solid #f0e3d2;
+            }
+            .list-item h4 {
+                margin: 0 0 6px;
+                font-size: 16px;
+            }
+            .list-item a {
+                color: var(--accent);
+                text-decoration: none;
+                font-size: 12px;
+                font-family: "Inter", "Segoe UI", sans-serif;
+            }
+            textarea {
+                width: 100%;
+                min-height: 140px;
+                background: #fffdf9;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 12px;
+                color: var(--text);
+                font-family: "Inter", "Segoe UI", sans-serif;
+                font-size: 14px;
+            }
+            .error {
+                color: var(--danger);
+                font-weight: 700;
+                font-family: "Inter", "Segoe UI", sans-serif;
+            }
+            .overview {
+                white-space: pre-wrap;
+                font-size: 15px;
+                line-height: 1.55;
+            }
+            .divider {
+                height: 3px;
+                width: 100%;
+                background: repeating-linear-gradient(
+                    90deg,
+                    var(--accent),
+                    var(--accent) 12px,
+                    transparent 12px,
+                    transparent 22px
+                );
+                border-radius: 999px;
+                margin: 8px 0 2px;
             }
         </style>
     </head>
     <body>
-        <h1>HN batch analyzer</h1>
+        <main>
+            <header class="card hero">
+                <h1>HN batch analyzer</h1>
+                <p>Fetch the latest Hacker News stories, then generate an overview tailored to your bio.</p>
+                <div class="divider"></div>
+            </header>
 
-        <div class="row">
-            <button id="fetch">Fetch new batch</button>
-            <button id="analyze">Run analysis</button>
-            <span id="spinner">Working…</span>
-        </div>
+            <section class="card">
+                <h2>1) Fetch the latest batch</h2>
+                <div class="actions">
+                    <button id="fetch">Fetch new batch</button>
+                    <span class="status-pill" id="fetchStatus">
+                        <span class="dot" id="fetchDot"></span>
+                        <span id="fetchText">Idle</span>
+                    </span>
+                </div>
+                <div class="meta" id="jobMeta">(no job running)</div>
+            </section>
 
-        <div class="row" style="align-items: flex-start">
-            <textarea
-                id="bio"
-                placeholder="Paste your bio here..."
-                style="padding: 8px; width: 520px; height: 120px"
-            ></textarea>
-            <div>
-                <label style="display: block; font-size: 12px; opacity: 0.7"
-                    >Optional batch number</label
-                >
-                <input
-                    id="batchNumber"
-                    type="number"
-                    min="1"
-                    style="padding: 8px; width: 140px"
-                />
-            </div>
-        </div>
+            <section class="card">
+                <details id="batchDetails" open>
+                    <summary>Latest batch</summary>
+                    <div class="meta" id="batchMeta">(no batch yet)</div>
+                    <div class="list" id="batchOut"></div>
+                </details>
+            </section>
 
-        <div id="error" style="color: #b00020; margin-top: 12px"></div>
+            <section class="card">
+                <h2>2) Add your bio</h2>
+                <textarea id="bio" placeholder="Paste your bio here..."></textarea>
+                <div class="actions" style="margin-top: 12px">
+                    <button id="analyze" class="secondary">Run analysis</button>
+                    <span class="status-pill" id="analyzeStatus">
+                        <span class="dot" id="analyzeDot"></span>
+                        <span id="analyzeText">Idle</span>
+                    </span>
+                </div>
+                <div id="error" class="error" style="margin-top: 10px"></div>
+            </section>
 
-        <h3>Job status</h3>
-        <pre id="jobStatus">(no job running)</pre>
+            <section class="card">
+                <details id="summariesDetails" open>
+                    <summary>Summaries</summary>
+                    <div class="list" id="summariesOut"></div>
+                </details>
+            </section>
 
-        <h3>Latest batch</h3>
-        <pre id="batchOut">(no batch yet)</pre>
-
-        <h3>Overview</h3>
-        <pre id="overviewOut">(no overview yet)</pre>
-
-        <h3>Summaries</h3>
-        <pre id="summariesOut">(no summaries yet)</pre>
+            <section class="card">
+                <h2>Overview article</h2>
+                <div class="overview" id="overviewOut">(no overview yet)</div>
+            </section>
+        </main>
 
         <script>
             const fetchBtn = document.getElementById("fetch");
             const analyzeBtn = document.getElementById("analyze");
-            const spinner = document.getElementById("spinner");
-            const jobStatus = document.getElementById("jobStatus");
+            const jobMeta = document.getElementById("jobMeta");
             const batchOut = document.getElementById("batchOut");
             const summariesOut = document.getElementById("summariesOut");
             const overviewOut = document.getElementById("overviewOut");
             const errorPanel = document.getElementById("error");
             const bio = document.getElementById("bio");
-            const batchNumber = document.getElementById("batchNumber");
+            const fetchStatus = document.getElementById("fetchStatus");
+            const fetchText = document.getElementById("fetchText");
+            const fetchDot = document.getElementById("fetchDot");
+            const analyzeStatus = document.getElementById("analyzeStatus");
+            const analyzeText = document.getElementById("analyzeText");
+            const analyzeDot = document.getElementById("analyzeDot");
+            const batchMeta = document.getElementById("batchMeta");
 
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
             const BIO_STORAGE_KEY = "hn_bio";
+
+            const setStatus = (kind, text, state) => {
+                const dot = kind === "fetch" ? fetchDot : analyzeDot;
+                const label = kind === "fetch" ? fetchText : analyzeText;
+                label.textContent = text;
+                dot.classList.remove("success", "error");
+                if (state) {
+                    dot.classList.add(state);
+                }
+            };
 
             const getBioHash = async (text) => {
                 if (!text) return null;
@@ -98,20 +303,35 @@
             };
 
             const renderBatch = (data) => {
-                batchOut.textContent = JSON.stringify(
-                    {
-                        batch_number: data.batch_number,
-                        created_at: data.created_at,
-                        stories: data.stories,
-                    },
-                    null,
-                    2,
-                );
-                summariesOut.textContent = JSON.stringify(
-                    data.summaries || [],
-                    null,
-                    2,
-                );
+                batchMeta.textContent = `Batch #${data.batch_number} · ${data.created_at}`;
+
+                batchOut.replaceChildren();
+                (data.stories || []).forEach((story) => {
+                    const item = document.createElement("div");
+                    item.className = "list-item";
+                    const title = document.createElement("h4");
+                    title.textContent = `${story.rank}. ${story.title}`;
+                    const link = document.createElement("a");
+                    link.href = story.url;
+                    link.textContent = story.url;
+                    link.target = "_blank";
+                    item.append(title, link);
+                    batchOut.append(item);
+                });
+
+                summariesOut.replaceChildren();
+                (data.summaries || []).forEach((summary) => {
+                    const item = document.createElement("div");
+                    item.className = "list-item";
+                    const title = document.createElement("h4");
+                    const story = data.stories.find((s) => s.id === summary.story_id);
+                    title.textContent = story ? story.title : `Story ${summary.story_id}`;
+                    const text = document.createElement("p");
+                    text.textContent = summary.summary_text;
+                    item.append(title, text);
+                    summariesOut.append(item);
+                });
+
                 overviewOut.textContent = data.overview
                     ? data.overview.article_text
                     : "(no overview yet)";
@@ -124,8 +344,9 @@
                     : "/api/batches/latest/";
                 const resp = await fetch(url);
                 if (resp.status === 404) {
-                    batchOut.textContent = "(no batch yet)";
-                    summariesOut.textContent = "(no summaries yet)";
+                    batchMeta.textContent = "(no batch yet)";
+                    batchOut.textContent = "";
+                    summariesOut.textContent = "";
                     overviewOut.textContent = "(no overview yet)";
                     return;
                 }
@@ -137,7 +358,7 @@
                 while (true) {
                     const resp = await fetch(`/api/jobs/${jobId}/`);
                     const data = await resp.json();
-                    jobStatus.textContent = JSON.stringify(data, null, 2);
+                    jobMeta.textContent = `${data.message || "Working"} · ${data.progress_current}/${data.progress_total}`;
                     if (data.status === "COMPLETE") {
                         return data;
                     }
@@ -149,7 +370,8 @@
             };
 
             fetchBtn.addEventListener("click", async () => {
-                spinner.style.display = "inline";
+                fetchBtn.disabled = true;
+                setStatus("fetch", "Fetching…", null);
                 errorPanel.textContent = "";
                 try {
                     const resp = await fetch("/api/jobs/fetch-batch/", {
@@ -162,21 +384,21 @@
                     const data = await resp.json();
                     await pollJob(data.job_id);
                     await fetchLatestBatch();
+                    setStatus("fetch", "Done", "success");
                 } catch (err) {
                     errorPanel.textContent = err.message;
+                    setStatus("fetch", "Error", "error");
                 } finally {
-                    spinner.style.display = "none";
+                    fetchBtn.disabled = false;
                 }
             });
 
             analyzeBtn.addEventListener("click", async () => {
-                spinner.style.display = "inline";
+                analyzeBtn.disabled = true;
+                setStatus("analyze", "Analyzing…", null);
                 errorPanel.textContent = "";
                 try {
                     const payload = { bio: bio.value };
-                    if (batchNumber.value) {
-                        payload.batch_number = Number(batchNumber.value);
-                    }
                     const resp = await fetch("/api/jobs/analyze/", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -192,10 +414,12 @@
                     }
                     await pollJob(data.job_id);
                     await fetchLatestBatch();
+                    setStatus("analyze", "Done", "success");
                 } catch (err) {
                     errorPanel.textContent = err.message;
+                    setStatus("analyze", "Error", "error");
                 } finally {
-                    spinner.style.display = "none";
+                    analyzeBtn.disabled = false;
                 }
             });
 
