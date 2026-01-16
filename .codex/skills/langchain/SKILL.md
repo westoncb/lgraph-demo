@@ -1,85 +1,103 @@
 ---
 name: langgraph-v1
-description: Use when writing or refactoring Python agent code to be valid for LangGraph v1 + LangChain v1 (latest stable): migrate off langgraph.prebuilt.create_react_agent and other deprecated LangGraph prebuilts; use langchain.agents.create_agent + middleware; update prompts/system_prompt, state schema (TypedDict-only), tools list (no ToolNode), structured output strategies, streaming node names, runtime context injection, and message content_blocks/output_version changes.
+description: Use when writing or refactoring Python code to be valid for LangGraph v1.x (Graph API + Functional API) and its LangChain v1 alignment: handle LangGraph v1 deprecations (MessageGraph, ValidationNode, create_react_agent, AgentState variants, interrupt types), correct v1 import paths (StateGraph/START/END, entrypoint/task, checkpoint/store), and the LangChain v1 agent replacement (langchain.agents.create_agent + middleware, system_prompt, TypedDict-only state_schema, tools list).
 ---
 
-# LangGraph v1 + LangChain v1: delta-only cheat sheet (write valid v1 code)
+# LangGraph v1 + LangChain v1 (Python): delta-only notes for writing valid v1 code
 
-## 1) Prebuilt agent: `create_react_agent` → `create_agent`
+## 0) Version + Python floor
+
+- Assume Python 3.10+ (LangGraph v1 drops 3.9).
+- Upgrade baseline:
+  - `pip install -U langgraph langchain-core`
+
+## 1) LangGraph Graph API is stable (mostly unchanged)
+
+- Graph API imports remain:
+  - `from langgraph.graph import START, END, StateGraph`
+
+## 2) LangGraph Functional API exists (v1 docs-first path)
+
+- Entrypoints are defined via:
+  - `from langgraph.func import entrypoint`
+- Entrypoint function must accept **one positional input argument** (use a dict if multiple inputs are needed).
+- Entrypoints can request injectable params by name + type annotation:
+  - `previous`, `store`, `writer`, `config`
+- Common v1 import paths shown in docs/examples:
+  - `from langgraph.store.base import BaseStore`
+  - `from langgraph.store.memory import InMemoryStore`
+  - `from langgraph.checkpoint.memory import InMemorySaver`
+
+## 3) Checkpointing / persistence packages and imports
+
+- In-memory checkpointer:
+  - `from langgraph.checkpoint.memory import InMemorySaver`
+- SQLite/Postgres checkpointers are separate installables:
+  - `langgraph-checkpoint-sqlite` (SqliteSaver / AsyncSqliteSaver)
+  - `langgraph-checkpoint-postgres` (PostgresSaver / AsyncPostgresSaver)
+- (If using custom serialization) serde lives under:
+  - `langgraph.checkpoint.serde.*`
+
+## 4) LangGraph v1 deprecations (replace these)
+
+LangGraph v1 is backwards compatible overall, but deprecates specific agent/runtime helpers:
+
+### 4.1) `MessageGraph` (deprecated) → `StateGraph` + `messages` key
+
+- Replace `MessageGraph` usage with `StateGraph` and a state that contains a `messages` key.
+
+### 4.2) `ValidationNode` (deprecated)
+
+- If you were using `langgraph.prebuilt.ValidationNode`, prefer LangChain v1 `create_agent` tool validation + middleware error handling (see section 5).
+
+### 4.3) Agent prebuilt + agent state moved out of LangGraph
+
+- Deprecated in LangGraph v1:
+  - `langgraph.prebuilt.create_react_agent`
+  - `langgraph.prebuilt.AgentState` and pydantic variants
+  - LangGraph interrupt TypedDicts (HumanInterruptConfig / ActionRequest / HumanInterrupt)
+- Replacements live in LangChain v1:
+  - `from langchain.agents import create_agent`
+  - `from langchain.agents import AgentState`
+  - interrupt types: `from langchain.agents.interrupt import HumanInterruptConfig, ActionRequest, HumanInterrupt`
+
+## 5) LangChain v1 agent API (built on LangGraph)
+
+If you’re building an “agent loop” via prebuilts, v1 expects LangChain’s API:
+
+### 5.1) `create_react_agent` → `create_agent`
 
 - Replace:
   - `from langgraph.prebuilt import create_react_agent`
 - With:
   - `from langchain.agents import create_agent`
 
-## 2) Prompt param rename + type change
+### 5.2) `prompt` → `system_prompt` (string)
 
-- Replace `prompt=...` with `system_prompt=...`
-- Pass `system_prompt` as a **string** (not `SystemMessage`).
+- `system_prompt="..."` (string), not `SystemMessage`.
 
-## 3) Hooks replaced by middleware
+### 5.3) Hooks → middleware
 
-- Replace:
-  - `pre_model_hook=...` → middleware implementing `before_model(...)`
-  - `post_model_hook=...` → middleware implementing `after_model(...)`
-- Dynamic system prompt:
-  - Use `@dynamic_prompt` middleware (`from langchain.agents.middleware import dynamic_prompt, ModelRequest`).
+- `pre_model_hook`/`post_model_hook` patterns move to middleware (`before_model`/`after_model`).
 
-## 4) State schema restrictions (v1 agents)
+### 5.4) Tools: pass a list, not a ToolNode
 
-- Use `TypedDict` state only.
-- Prefer inheriting from `langchain.agents.AgentState` for agent state.
-- Do **not** use pydantic/dataclass state schemas for `create_agent`.
+- `create_agent(..., tools=[...])`
+- Do not wrap tools in `ToolNode(...)` for `create_agent`.
 
-## 5) Runtime context injection
+### 5.5) State schemas: TypedDict-only
 
-- Prefer:
-  - `agent.invoke(..., context=Context(...))`
-  - `agent.stream(..., context=Context(...))`
-- The old `config["configurable"]` pattern may still work for backward compatibility, but don’t use it in new v1 code unless required.
+- `create_agent(..., state_schema=SomeTypedDict)`
+- No pydantic/dataclass state schemas.
 
-## 6) Tools input shape
+### 5.6) Streaming node name
 
-- Pass `tools=[...]` as a list of:
-  - `@tool` functions / `BaseTool` instances
-  - plain callables with type hints + docstring
-  - provider tool dicts (built-in provider tools)
-- Do **not** pass `ToolNode(...)` to `create_agent`.
+- When streaming agent events, the node name is `"model"` (not `"agent"`).
 
-## 7) Tool error handling
+## 6) Key “don’t break imports” reminders
 
-- Replace ToolNode-style `handle_tool_errors=...` with middleware implementing `wrap_tool_call(...)` (or the `@wrap_tool_call` helper).
-
-## 8) Model selection + “pre-bound model” caveat
-
-- Dynamic model selection: implement via middleware (`wrap_model_call(...)` and request overrides).
-- Don’t pass a pre-bound model (e.g., `ChatOpenAI().bind_tools(...)`) into `create_agent` when structured output is in play; prefer passing the model id / base model and supply `tools=` to `create_agent`.
-
-## 9) Structured output changes
-
-- Prompted output via `response_format=("please ...", Schema)` is removed.
-- Use:
-  - `from langchain.agents.structured_output import ToolStrategy, ProviderStrategy`
-  - `response_format=ToolStrategy(Schema)` or `ProviderStrategy(Schema)`
-
-## 10) Streaming node name rename
-
-- When streaming events, expect node name `"model"` (not `"agent"`).
-
-## 11) Messages: standard content blocks
-
-- Prefer `message.content_blocks` for provider-agnostic structured content.
-- If you need standardized blocks serialized into `message.content`, opt in via:
-  - `LC_OUTPUT_VERSION=v1` or model init `output_version="v1"`.
-
-## 12) Package / imports changed in LangChain v1
-
-- The top-level `langchain` namespace is slim; common v1 modules:
-  - `langchain.agents`, `langchain.messages`, `langchain.tools`, `langchain.chat_models`, `langchain.embeddings`
-- If you need legacy chains/retrievers/indexing/hub/community re-exports, use `langchain-classic` and update imports accordingly.
-
-## 13) Other breaking changes worth enforcing in generated code
-
-- Assume Python **3.10+**.
-- Chat model invocation return type is now `AIMessage` (not `BaseMessage`).
-- `.text()` becomes `.text` (property); avoid calling it.
+- Graph API: `langgraph.graph` (START/END/StateGraph)
+- Functional API: `langgraph.func` (entrypoint)
+- Checkpointing: `langgraph.checkpoint.*` (InMemorySaver, sqlite/postgres modules)
+- Store/memory: `langgraph.store.*`
+- Agent prebuilt migration target: `langchain.agents` (create_agent, AgentState) and `langchain.agents.interrupt` (interrupt types)
