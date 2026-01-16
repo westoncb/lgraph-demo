@@ -138,7 +138,7 @@ def run_overview_generation(bio_text: str, summaries: list[dict]) -> str:
     )
     system = SystemMessage(
         content=(
-            "You write an enjoyable, informative article that incorporates key information from the summaries relevant to the user."
+            "Write an enjoyable, informative article that incorporates key information from the summaries relevant to the user."
             "Aim for ~4 - 5 paragraphs; aim for smooth natural reading, don't be afraid to extrapolate and share insights you see that might be relevant to the specific reader whose bio info you have; don't create separate section headings or anything like that, just write a nice literate essay with a handful of paragraphs; token limit is ~3000."
         )
     )
@@ -146,7 +146,7 @@ def run_overview_generation(bio_text: str, summaries: list[dict]) -> str:
         content=(
             f"Reader bio:\n{bio_text}\n\n"
             f"Story summaries:\n{bullets}\n\n"
-            "Write the article:"
+            "Write the article of a few paragraphs with no markdown or anything like that, which you of course would never see in e.g. a New Yorker article; we're looking for just high quality literary content with no formatting beyond paragraph breaks; a title is fine:"
         )
     )
     response = overview_model.invoke([system, human])
