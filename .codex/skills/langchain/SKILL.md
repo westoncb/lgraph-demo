@@ -1,6 +1,9 @@
 ---
 name: langgraph-v1
-description: Use when writing or refactoring Python code to be valid for LangGraph v1.x (Graph API + Functional API) and its LangChain v1 alignment: handle LangGraph v1 deprecations (MessageGraph, ValidationNode, create_react_agent, AgentState variants, interrupt types), correct v1 import paths (StateGraph/START/END, entrypoint/task, checkpoint/store), and the LangChain v1 agent replacement (langchain.agents.create_agent + middleware, system_prompt, TypedDict-only state_schema, tools list).
+description: >
+  Use when writing or refactoring Python code for LangGraph v1.x + LangChain v1:
+  Graph API + Functional API import paths, checkpoint/store usage, and migrations off deprecated prebuilts
+  (create_react_agent -> langchain.agents.create_agent).
 ---
 
 # LangGraph v1 + LangChain v1 (Python): delta-only notes for writing valid v1 code
