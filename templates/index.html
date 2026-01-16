@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+    <head>
+        <meta http-equiv="Content-Language" chartset="utf-8" content="en" />
+
+        <title>lgraph-demo</title>
+        <style>
+            body {
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                padding: 24px;
+            }
+            button {
+                padding: 10px 14px;
+                cursor: pointer;
+            }
+            pre {
+                padding: 12px;
+                background: #f6f6f6;
+                border-radius: 8px;
+            }
+            .row {
+                margin-top: 12px;
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
+            #spinner {
+                display: none;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Django + DRF + LangGraph demo</h1>
+
+        <div class="row">
+            <input
+                id="q"
+                value="hello graph"
+                style="padding: 8px; width: 320px"
+            />
+            <button id="run">Run LangGraph demo</button>
+            <span id="spinner">Running…</span>
+        </div>
+
+        <h3>Result</h3>
+        <pre id="out">(click “Run LangGraph demo”)</pre>
+
+        <script>
+            const btn = document.getElementById("run");
+            const out = document.getElementById("out");
+            const spinner = document.getElementById("spinner");
+            const q = document.getElementById("q");
+
+            btn.addEventListener("click", async () => {
+                spinner.style.display = "inline";
+                out.textContent = "";
+                try {
+                    const resp = await fetch(
+                        `/api/run-demo/?q=${encodeURIComponent(q.value)}`,
+                    );
+                    const data = await resp.json();
+                    out.textContent = JSON.stringify(data, null, 2);
+                } finally {
+                    spinner.style.display = "none";
+                }
+            });
+        </script>
+    </body>
+</html>
