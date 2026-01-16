@@ -1,5 +1,7 @@
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .langgraph_demo import run_demo
@@ -24,17 +26,13 @@ def _serialize_batch(batch: HNBatch, bio_hash: str | None = None) -> dict:
         .all()
         .order_by("rank")
     )
-    overview = getattr(batch, "overview", None)
+    overview = None
     if bio_hash:
-        if not (overview and overview.bio_hash == bio_hash):
-            overview = None
-        summaries_qs = HNStorySummary.objects.filter(story__batch=batch, bio_hash=bio_hash)
+        overview = batch.overviews.filter(bio_hash=bio_hash).order_by("-created_at").first()
     else:
-        summaries_qs = []
-        if overview:
-            bio_hash = overview.bio_hash
-            summaries_qs = HNStorySummary.objects.filter(story__batch=batch, bio_hash=bio_hash)
+        overview = batch.overviews.order_by("-created_at").first()
 
+    summaries_qs = HNStorySummary.objects.filter(story__batch=batch)
     summary_map = {summary.story_id: summary.summary_text for summary in summaries_qs}
 
     return {
@@ -71,14 +69,20 @@ def _serialize_batch(batch: HNBatch, bio_hash: str | None = None) -> dict:
     }
 
 
+@csrf_exempt
 @api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def create_fetch_batch_job(request):
     job = Job.objects.create(kind=Job.Kind.FETCH_BATCH, status=Job.Status.QUEUED)
     fetch_batch_job(job.id)
     return Response({"job_id": job.id})
 
 
+@csrf_exempt
 @api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def create_analyze_batch_job(request):
     bio_text = request.data.get("bio", "")
     if not bio_text:

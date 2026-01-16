@@ -32,22 +32,21 @@ class HNStoryContent(models.Model):
 
 class HNStorySummary(models.Model):
     story = models.ForeignKey(HNStory, on_delete=models.CASCADE, related_name="summaries")
-    bio_hash = models.CharField(max_length=64)
     summary_text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        unique_together = ("story", "bio_hash")
-
     def __str__(self) -> str:
-        return f"Summary for {self.story_id} ({self.bio_hash[:8]})"
+        return f"Summary for {self.story_id}"
 
 
 class HNOverviewArticle(models.Model):
-    batch = models.OneToOneField(HNBatch, on_delete=models.CASCADE, related_name="overview")
+    batch = models.ForeignKey(HNBatch, on_delete=models.CASCADE, related_name="overviews")
     bio_hash = models.CharField(max_length=64)
     article_text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("batch", "bio_hash")
 
     def __str__(self) -> str:
         return f"Overview for batch {self.batch_id}"

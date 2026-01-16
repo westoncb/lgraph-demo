@@ -13,7 +13,7 @@ from api.models import (
     HNStorySummary,
     Job,
 )
-from api.services.analysis_graph import run_analysis
+from api.services.analysis_graph import run_overview_generation, run_summary_analysis
 from api.services.extract import extract_article_text
 from api.services.hn import get_item, get_top_story_ids
 
@@ -96,24 +96,42 @@ def analyze_batch_job(job_id: int, batch_number: int, bio_text: str) -> None:
         batch = HNBatch.objects.get(number=batch_number)
         _update_job(job, batch=batch)
         bio_hash = hashlib.sha256(bio_text.encode("utf-8")).hexdigest()
-        summaries = []
-        result = run_analysis(batch_number=batch_number, bio_text=bio_text)
-        summaries = result.get("summaries", [])
-        overview_text = result.get("overview_text", "")
+        story_ids = list(batch.stories.order_by("rank").values_list("id", flat=True))
+        existing_count = HNStorySummary.objects.filter(story_id__in=story_ids).count()
 
-        _update_job(job, progress_total=len(summaries) + 1, progress_current=0)
+        summaries: list[dict] = []
+        if existing_count < len(story_ids):
+            _update_job(job, message="Generating summaries")
+            result = run_summary_analysis(batch_number=batch_number)
+            summaries = result.get("summaries", [])
+            _update_job(job, progress_total=len(summaries) + 1, progress_current=0)
 
-        for idx, summary in enumerate(summaries, start=1):
-            HNStorySummary.objects.update_or_create(
-                story_id=summary["story_id"],
-                bio_hash=bio_hash,
-                defaults={"summary_text": summary["summary"]},
-            )
-            _update_job(job, progress_current=idx, message=f"Saved summary {idx}/{len(summaries)}")
+            for idx, summary in enumerate(summaries, start=1):
+                HNStorySummary.objects.update_or_create(
+                    story_id=summary["story_id"],
+                    defaults={"summary_text": summary["summary"]},
+                )
+                _update_job(job, progress_current=idx, message=f"Saved summary {idx}/{len(summaries)}")
+        else:
+            _update_job(job, progress_total=len(story_ids) + 1, progress_current=0, message="Summaries already exist")
+            summaries = [
+                {
+                    "story_id": story.id,
+                    "title": story.title,
+                    "url": story.url,
+                    "summary": HNStorySummary.objects.filter(story=story)
+                    .order_by("-created_at")
+                    .values_list("summary_text", flat=True)
+                    .first(),
+                }
+                for story in batch.stories.order_by("rank")
+            ]
 
+        overview_text = run_overview_generation(bio_text=bio_text, summaries=summaries)
         HNOverviewArticle.objects.update_or_create(
             batch=batch,
-            defaults={"bio_hash": bio_hash, "article_text": overview_text},
+            bio_hash=bio_hash,
+            defaults={"article_text": overview_text},
         )
 
         _update_job(job, progress_current=len(summaries) + 1, message="Saved overview")

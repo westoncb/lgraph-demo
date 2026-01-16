@@ -13,7 +13,6 @@ from api.models import HNBatch
 
 class AnalysisInput(TypedDict):
     batch_number: int
-    bio_text: str
 
 
 class StoryPayload(TypedDict):
@@ -58,7 +57,6 @@ def _load_stories(batch_number: int) -> list[StoryPayload]:
 async def _summarize_story(
     sem: asyncio.Semaphore,
     model: ChatOpenAI,
-    bio_text: str,
     payload: StoryPayload,
 ) -> dict:
     if payload["error"] or not payload["text"]:
@@ -71,13 +69,11 @@ async def _summarize_story(
 
     system = SystemMessage(
         content=(
-            "You summarize news articles for a reader using their bio context. "
-            "Write 4-6 sentences, highlight why it matters, and avoid hype."
+            "You summarize news articles. Write 4-6 sentences, highlight why it matters, and avoid hype."
         )
     )
     human = HumanMessage(
         content=(
-            f"Reader bio:\n{bio_text}\n\n"
             f"Title: {payload['title']}\n"
             f"URL: {payload['url']}\n\n"
             f"Article text:\n{payload['text']}\n\n"
@@ -99,37 +95,14 @@ async def _summarize_all(state: AnalysisState) -> dict:
     concurrency = int(os.environ.get("SUMMARY_CONCURRENCY", "5"))
     sem = asyncio.Semaphore(concurrency)
     tasks = [
-        _summarize_story(sem, summary_model, state["bio_text"], payload)
+        _summarize_story(sem, summary_model, payload)
         for payload in state["stories"]
     ]
     summaries = await asyncio.gather(*tasks)
     return {"summaries": summaries}
 
 
-async def _write_overview(state: AnalysisState) -> dict:
-    _, overview_model = _get_models()
-    bullets = "\n".join(
-        f"- {item['title']} ({item['url']}): {item['summary']}"
-        for item in state["summaries"]
-    )
-    system = SystemMessage(
-        content=(
-            "You write a concise overview article for a reader based on summaries. "
-            "Aim for 6-10 paragraphs, use clear headings, and keep it under ~3000 tokens."
-        )
-    )
-    human = HumanMessage(
-        content=(
-            f"Reader bio:\n{state['bio_text']}\n\n"
-            f"Story summaries:\n{bullets}\n\n"
-            "Write the overview article:"
-        )
-    )
-    response = await overview_model.ainvoke([system, human])
-    return {"overview_text": response.content.strip()}
-
-
-def run_analysis(batch_number: int, bio_text: str) -> dict[str, Any]:
+def run_summary_analysis(batch_number: int) -> dict[str, Any]:
     stories = _load_stories(batch_number)
 
     def inject_stories(state: AnalysisInput) -> dict:
@@ -138,15 +111,43 @@ def run_analysis(batch_number: int, bio_text: str) -> dict[str, Any]:
     builder = StateGraph(AnalysisState, input_schema=AnalysisInput)
     builder.add_node("inject_stories", inject_stories)
     builder.add_node("summarize_all", _summarize_all)
-    builder.add_node("write_overview", _write_overview)
     builder.add_edge(START, "inject_stories")
     builder.add_edge("inject_stories", "summarize_all")
-    builder.add_edge("summarize_all", "write_overview")
-    builder.add_edge("write_overview", END)
+    builder.add_edge("summarize_all", END)
 
     graph = builder.compile()
-    result = asyncio.run(graph.ainvoke({"batch_number": batch_number, "bio_text": bio_text}))
+    result = asyncio.run(graph.ainvoke({"batch_number": batch_number}))
     return {
         "summaries": result.get("summaries", []),
-        "overview_text": result.get("overview_text", ""),
     }
+
+
+def run_overview_generation(bio_text: str, summaries: list[dict]) -> str:
+    _, overview_model = _get_models()
+    normalized = [
+        {
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "summary": item.get("summary") or "No summary available.",
+        }
+        for item in summaries
+    ]
+    bullets = "\n".join(
+        f"- {item['title']} ({item['url']}): {item['summary']}"
+        for item in normalized
+    )
+    system = SystemMessage(
+        content=(
+            "You write an enjoyable, informative article that incorporates key information from the summaries relevant to the user."
+            "Aim for ~4 - 5 paragraphs; aim for smooth natural reading, don't be afraid to extrapolate and share insights you see that might be relevant to the specific reader whose bio info you have; don't create separate section headings or anything like that, just write a nice literate essay with a handful of paragraphs; token limit is ~3000."
+        )
+    )
+    human = HumanMessage(
+        content=(
+            f"Reader bio:\n{bio_text}\n\n"
+            f"Story summaries:\n{bullets}\n\n"
+            "Write the article:"
+        )
+    )
+    response = overview_model.invoke([system, human])
+    return response.content.strip()
