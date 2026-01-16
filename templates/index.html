@@ -33,40 +33,152 @@
         </style>
     </head>
     <body>
-        <h1>Django + DRF + LangGraph demo</h1>
+        <h1>HN batch analyzer</h1>
 
         <div class="row">
-            <input
-                id="q"
-                value="hello graph"
-                style="padding: 8px; width: 320px"
-            />
-            <button id="run">Run LangGraph demo</button>
-            <span id="spinner">Running…</span>
+            <button id="fetch">Fetch new batch</button>
+            <button id="analyze">Run analysis</button>
+            <span id="spinner">Working…</span>
         </div>
 
-        <h3>Result</h3>
-        <pre id="out">(click “Run LangGraph demo”)</pre>
+        <div class="row" style="align-items: flex-start">
+            <textarea
+                id="bio"
+                placeholder="Paste your bio here..."
+                style="padding: 8px; width: 520px; height: 120px"
+            ></textarea>
+            <div>
+                <label style="display: block; font-size: 12px; opacity: 0.7"
+                    >Optional batch number</label
+                >
+                <input
+                    id="batchNumber"
+                    type="number"
+                    min="1"
+                    style="padding: 8px; width: 140px"
+                />
+            </div>
+        </div>
+
+        <div id="error" style="color: #b00020; margin-top: 12px"></div>
+
+        <h3>Job status</h3>
+        <pre id="jobStatus">(no job running)</pre>
+
+        <h3>Latest batch</h3>
+        <pre id="batchOut">(no batch yet)</pre>
+
+        <h3>Overview</h3>
+        <pre id="overviewOut">(no overview yet)</pre>
+
+        <h3>Summaries</h3>
+        <pre id="summariesOut">(no summaries yet)</pre>
 
         <script>
-            const btn = document.getElementById("run");
-            const out = document.getElementById("out");
+            const fetchBtn = document.getElementById("fetch");
+            const analyzeBtn = document.getElementById("analyze");
             const spinner = document.getElementById("spinner");
-            const q = document.getElementById("q");
+            const jobStatus = document.getElementById("jobStatus");
+            const batchOut = document.getElementById("batchOut");
+            const summariesOut = document.getElementById("summariesOut");
+            const overviewOut = document.getElementById("overviewOut");
+            const errorPanel = document.getElementById("error");
+            const bio = document.getElementById("bio");
+            const batchNumber = document.getElementById("batchNumber");
 
-            btn.addEventListener("click", async () => {
-                spinner.style.display = "inline";
-                out.textContent = "";
-                try {
-                    const resp = await fetch(
-                        `/api/run-demo/?q=${encodeURIComponent(q.value)}`,
-                    );
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+            const renderBatch = (data) => {
+                batchOut.textContent = JSON.stringify(
+                    {
+                        batch_number: data.batch_number,
+                        created_at: data.created_at,
+                        stories: data.stories,
+                    },
+                    null,
+                    2,
+                );
+                summariesOut.textContent = JSON.stringify(
+                    data.summaries || [],
+                    null,
+                    2,
+                );
+                overviewOut.textContent = data.overview
+                    ? data.overview.article_text
+                    : "(no overview yet)";
+            };
+
+            const fetchLatestBatch = async () => {
+                const resp = await fetch("/api/batches/latest/");
+                if (resp.status === 404) {
+                    batchOut.textContent = "(no batch yet)";
+                    summariesOut.textContent = "(no summaries yet)";
+                    overviewOut.textContent = "(no overview yet)";
+                    return;
+                }
+                const data = await resp.json();
+                renderBatch(data);
+            };
+
+            const pollJob = async (jobId) => {
+                while (true) {
+                    const resp = await fetch(`/api/jobs/${jobId}/`);
                     const data = await resp.json();
-                    out.textContent = JSON.stringify(data, null, 2);
+                    jobStatus.textContent = JSON.stringify(data, null, 2);
+                    if (data.status === "COMPLETE") {
+                        return data;
+                    }
+                    if (data.status === "ERROR") {
+                        throw new Error(data.error || "Job failed");
+                    }
+                    await sleep(1500);
+                }
+            };
+
+            fetchBtn.addEventListener("click", async () => {
+                spinner.style.display = "inline";
+                errorPanel.textContent = "";
+                try {
+                    const resp = await fetch("/api/jobs/fetch-batch/", {
+                        method: "POST",
+                    });
+                    const data = await resp.json();
+                    await pollJob(data.job_id);
+                    await fetchLatestBatch();
+                } catch (err) {
+                    errorPanel.textContent = err.message;
                 } finally {
                     spinner.style.display = "none";
                 }
             });
+
+            analyzeBtn.addEventListener("click", async () => {
+                spinner.style.display = "inline";
+                errorPanel.textContent = "";
+                try {
+                    const payload = { bio: bio.value };
+                    if (batchNumber.value) {
+                        payload.batch_number = Number(batchNumber.value);
+                    }
+                    const resp = await fetch("/api/jobs/analyze/", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await resp.json();
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    await pollJob(data.job_id);
+                    await fetchLatestBatch();
+                } catch (err) {
+                    errorPanel.textContent = err.message;
+                } finally {
+                    spinner.style.display = "none";
+                }
+            });
+
+            fetchLatestBatch().catch(() => {});
         </script>
     </body>
 </html>
